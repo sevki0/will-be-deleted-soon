@@ -1,27 +1,29 @@
-# --- Dockerfile for Next.js ---
-FROM node:20-alpine AS base
+# --- Build Stage ---
+FROM node:20-alpine AS builder
 WORKDIR /app
 
-# Install dependencies
+# Install all dependencies including devDependencies
 COPY package.json package-lock.json* yarn.lock* pnpm-lock.yaml* ./
-RUN npm install --production --ignore-scripts --prefer-offline || yarn install --production || pnpm install --prod
+RUN npm install
 
-# Copy application files
+# Copy source code
 COPY . .
 
 # Build Next.js app
 RUN npm run build
 
-# --- Production image ---
+# --- Production Stage ---
 FROM node:20-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 
-# Copy built files and node_modules from build stage
-COPY --from=base /app/.next ./.next
-COPY --from=base /app/node_modules ./node_modules
-COPY --from=base /app/public ./public
-COPY --from=base /app/package.json ./package.json
+# Copy built files and only production node_modules
+COPY --from=builder /app/.next ./.next
+COPY --from=builder /app/public ./public
+COPY --from=builder /app/package.json ./package.json
+
+# Install only production dependencies in final image
+RUN npm install --omit=dev
 
 EXPOSE 3000
 CMD ["npm", "start"]
